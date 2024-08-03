@@ -13,7 +13,7 @@ from peft import LoraConfig, PeftConfig, get_peft_model
 from transformers import TrainerCallback, TrainingArguments, Trainer
 
 
-def evaluate(y_true, y_pred, save_trained_folder):
+def evaluate(y_true, y_pred, save_trained_folder, flag='before'):
     labels = ['positive', 'negative']
     mapping = {'positive': 1, 'negative': 0}
     def map_func(x):
@@ -40,15 +40,15 @@ def evaluate(y_true, y_pred, save_trained_folder):
 
     # 准备保存结果
     results = {
-        "eval_accuracy": all_accuracy,
-        "f1_score_0": f1_score_0,
-        "f1_score_1": f1_score_1,
-        "f1_score_macro": f1_score_macro,
-        "f1_score_weighted": f1_score_weighted
+        flag+"_eval_accuracy": all_accuracy,
+        flag+"_f1_score_0": f1_score_0,
+        flag+"_f1_score_1": f1_score_1,
+        flag+"_f1_score_macro": f1_score_macro,
+        flag+"_f1_score_weighted": f1_score_weighted
     }
 
     # 记录日志
-    with open(f"{save_trained_folder}/all_results.json", "w") as file:
+    with open(f"{save_trained_folder}/all_results.json", "a") as file:
         json.dump(results, file, indent=4)
 
     return {"accuracy": all_accuracy, "f1": f1_score_macro}

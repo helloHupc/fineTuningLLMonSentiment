@@ -17,11 +17,12 @@ from transformers import (AutoModelForCausalLM,
                           pipeline,
                           logging)
 import utils
+from torch.utils.tensorboard import SummaryWriter
 import warnings
 
 warnings.filterwarnings("ignore")
 
-model_name = "meta-llama/Llama-2-7b-hf"
+model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
 
 compute_dtype = getattr(torch, "float16")
 
@@ -42,18 +43,17 @@ model = AutoModelForCausalLM.from_pretrained(
 model.config.use_cache = False
 model.config.pretraining_tp = 1
 
-max_seq_length = 512
+max_seq_length = 256
 tokenizer = AutoTokenizer.from_pretrained(model_name, max_seq_length=max_seq_length)
 tokenizer.pad_token = tokenizer.eos_token
-tokenizer.padding_side = "right"
 
 # dataset
-filename = "data/FinancialNews/data.csv"
-# filename = "data/ChnSentiCorp/data.csv"
+# filename = "data/FinancialNews/data.csv"
+filename = "data/ChnSentiCorp/data.csv"
 # filename = "data/WeiboSentiment/data.csv"
 # filename = "data/TwitterSentiment/data.csv"
 
-processed_data = utils.process_dataset(filename, 200, 100, 100)
+processed_data = utils.process_dataset(filename, 3000, 1000, 1000)
 
 train_data = processed_data['train']
 eval_data = processed_data['eval']
@@ -96,61 +96,71 @@ y_pred = predict(test_data, model, tokenizer)
 
 utils.evaluate(y_true, y_pred, save_trained_folder)
 
-# # 微调训练器 SFTTrainer
-#
-# peft_config = LoraConfig(
-#     lora_alpha=16,
-#     lora_dropout=0.1,
-#     r=64,
-#     bias="none",
-#     task_type="CAUSAL_LM",
-#     target_modules="all-linear",
-# )
-#
-#
-# training_arguments = TrainingArguments(
-#     output_dir=save_trained_folder+"/logs",  # directory to save and repository id
-#     num_train_epochs=3,  # number of training epochs
-#     per_device_train_batch_size=2,  # batch size per device during training
-#     gradient_accumulation_steps=8,  # number of steps before performing a backward/update pass
-#     gradient_checkpointing=True,  # use gradient checkpointing to save memory
-#     optim="paged_adamw_32bit",
-#     save_steps=0,
-#     logging_steps=25,  # log every 10 steps
-#     learning_rate=2e-4,  # learning rate, based on QLoRA paper
-#     weight_decay=0.001,
-#     fp16=True,
-#     bf16=False,
-#     max_grad_norm=0.3,  # max gradient norm based on QLoRA paper
-#     max_steps=-1,
-#     warmup_ratio=0.03,  # warmup ratio based on QLoRA paper
-#     group_by_length=False,
-#     lr_scheduler_type="cosine",  # use cosine learning rate scheduler
-#     report_to="tensorboard",  # report metrics to tensorboard
-#     evaluation_strategy="epoch"  # save checkpoint every epoch
-# )
-#
-# trainer = SFTTrainer(
-#     model=model,
-#     args=training_arguments,
-#     train_dataset=train_data,
-#     eval_dataset=eval_data,
-#     peft_config=peft_config,
-#     dataset_text_field="text",
-#     tokenizer=tokenizer,
-#     max_seq_length=max_seq_length,
-#     packing=False,
-#     dataset_kwargs={
-#         "add_special_tokens": False,
-#         "append_concat_token": False,
-#     }
-# )
-#
-# # Train model
-# trainer.train()
-#
-# # Save trained model
-# trainer.model.save_pretrained(save_trained_folder)
-#
-# y_pred = predict(test_data, model, tokenizer)
-# utils.evaluate(y_true, y_pred, save_trained_folder)
+# 微调训练器 SFTTrainer
+
+peft_config = LoraConfig(
+    lora_alpha=16,
+    lora_dropout=0.1,
+    r=64,
+    bias="none",
+    task_type="CAUSAL_LM",
+    target_modules="all-linear",
+)
+
+
+training_arguments = TrainingArguments(
+    output_dir=save_trained_folder+"/logs",
+    num_train_epochs=5,
+    per_device_train_batch_size=2,
+    gradient_accumulation_steps=4,
+    gradient_checkpointing=True,
+    optim="paged_adamw_32bit",
+    save_steps=0,
+    logging_steps=25,
+    learning_rate=2e-4,
+    weight_decay=0.001,
+    fp16=True,
+    bf16=False,
+    max_grad_norm=0.3,
+    max_steps=-1,
+    warmup_ratio=0.03,
+    group_by_length=False,
+    eval_strategy='epoch',
+    eval_steps=112,
+    eval_accumulation_steps=2,
+    lr_scheduler_type="linear",
+    report_to="tensorboard",
+)
+
+trainer = SFTTrainer(
+    model=model,
+    args=training_arguments,
+    train_dataset=train_data,
+    eval_dataset=eval_data,
+    peft_config=peft_config,
+    dataset_text_field="text",
+    tokenizer=tokenizer,
+    max_seq_length=max_seq_length,
+    packing=False,
+    dataset_kwargs={
+        "add_special_tokens": False,
+        "append_concat_token": False,
+    }
+)
+
+# Train model
+trainer.train()
+
+# Save trained model
+trainer.model.save_pretrained(save_trained_folder)
+
+y_pred = predict(test_data, model, tokenizer)
+metrics = utils.evaluate(y_true, y_pred, save_trained_folder, 'after')
+trainer.log_metrics("eval", metrics)
+trainer.save_metrics("eval", metrics)
+
+summary_write_log_dir = trainer.args.output_dir
+writer = SummaryWriter(log_dir=summary_write_log_dir)
+writer.add_scalar("eval/accuracy", metrics['accuracy'])
+writer.add_scalar("eval/f1", metrics['f1'])
+writer.close()

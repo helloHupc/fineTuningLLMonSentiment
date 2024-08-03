@@ -17,6 +17,7 @@ from datasets import Dataset
 from peft import LoraConfig, PeftConfig
 import bitsandbytes as bnb
 from trl import SFTTrainer
+from torch.utils.tensorboard import SummaryWriter
 
 from sklearn.model_selection import train_test_split
 import utils
@@ -44,7 +45,7 @@ model = AutoModelForCausalLM.from_pretrained(
 model.config.use_cache = False
 model.config.pretraining_tp = 1
 
-max_seq_length = 512
+max_seq_length = 256
 tokenizer = AutoTokenizer.from_pretrained(model_name, max_seq_length=max_seq_length)
 EOS_TOKEN = tokenizer.eos_token
 
@@ -54,7 +55,7 @@ filename = "data/FinancialNews/data.csv"
 # filename = "data/WeiboSentiment/data.csv"
 # filename = "data/TwitterSentiment/data.csv"
 
-processed_data = utils.process_dataset(filename, 200, 100, 100)
+processed_data = utils.process_dataset(filename, 200, 200, 200)
 
 train_data = processed_data['train']
 eval_data = processed_data['eval']
@@ -91,58 +92,66 @@ y_pred = predict(test_data, model, tokenizer)
 
 utils.evaluate(y_true, y_pred, save_trained_folder)
 
-# # 微调训练器 SFTTrainer
-# peft_config = LoraConfig(
-#     lora_alpha=16,
-#     lora_dropout=0,
-#     r=64,
-#     bias="none",
-#     task_type="CAUSAL_LM",
-#     target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-#                     "gate_proj", "up_proj", "down_proj", ],
-# )
-#
-# training_arguments = TrainingArguments(
-#     output_dir=save_trained_folder+"/logs",
-#     num_train_epochs=3,
-#     gradient_checkpointing=True,
-#     per_device_train_batch_size=8,
-#     gradient_accumulation_steps=8,
-#     optim="paged_adamw_32bit",
-#     save_steps=0,
-#     logging_steps=25,
-#     learning_rate=2e-4,
-#     weight_decay=0.001,
-#     fp16=True,
-#     bf16=False,
-#     max_grad_norm=0.3,
-#     max_steps=-1,
-#     warmup_ratio=0.03,
-#     group_by_length=False,
-#     evaluation_strategy='steps',
-#     eval_steps=112,
-#     eval_accumulation_steps=1,
-#     lr_scheduler_type="cosine",
-#     report_to="tensorboard",
-# )
-#
-# trainer = SFTTrainer(
-#     model=model,
-#     train_dataset=train_data,
-#     eval_dataset=eval_data,
-#     peft_config=peft_config,
-#     dataset_text_field="text",
-#     tokenizer=tokenizer,
-#     max_seq_length=max_seq_length,
-#     args=training_arguments,
-#     packing=False,
-# )
-#
-# # Train model
-# trainer.train()
-#
-# # Save trained model
+# 微调训练器 SFTTrainer
+peft_config = LoraConfig(
+    lora_alpha=16,
+    lora_dropout=0,
+    r=64,
+    bias="none",
+    task_type="CAUSAL_LM",
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                    "gate_proj", "up_proj", "down_proj", ],
+)
+
+training_arguments = TrainingArguments(
+    output_dir=save_trained_folder+"/logs",
+    num_train_epochs=5,
+    gradient_checkpointing=True,
+    per_device_train_batch_size=8,
+    gradient_accumulation_steps=2,
+    optim="paged_adamw_32bit",
+    save_steps=0,
+    logging_steps=25,
+    learning_rate=2e-4,
+    weight_decay=0.001,
+    fp16=True,
+    bf16=False,
+    max_grad_norm=0.3,
+    max_steps=-1,
+    warmup_ratio=0.03,
+    group_by_length=False,
+    eval_strategy='epoch',
+    eval_steps=112,
+    eval_accumulation_steps=2,
+    lr_scheduler_type="linear",
+    report_to="tensorboard",
+)
+
+trainer = SFTTrainer(
+    model=model,
+    train_dataset=train_data,
+    eval_dataset=eval_data,
+    peft_config=peft_config,
+    dataset_text_field="text",
+    tokenizer=tokenizer,
+    max_seq_length=max_seq_length,
+    args=training_arguments,
+    packing=False,
+)
+
+# Train model
+trainer.train()
+
+# Save trained model
 # trainer.model.save_pretrained(save_trained_folder)
-#
-# y_pred = predict(test_data, model, tokenizer)
-# utils.evaluate(y_true, y_pred, save_trained_folder)
+
+y_pred = predict(test_data, model, tokenizer)
+metrics = utils.evaluate(y_true, y_pred, save_trained_folder, 'after')
+trainer.log_metrics("eval", metrics)
+trainer.save_metrics("eval", metrics)
+
+summary_write_log_dir = trainer.args.output_dir
+writer = SummaryWriter(log_dir=summary_write_log_dir)
+writer.add_scalar("eval/accuracy", metrics['accuracy'])
+writer.add_scalar("eval/f1", metrics['f1'])
+writer.close()

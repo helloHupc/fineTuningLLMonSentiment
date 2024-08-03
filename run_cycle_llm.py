@@ -1,5 +1,6 @@
 from tqdm import tqdm
 import torch
+import os
 import numpy as np
 from transformers import (AutoModelForCausalLM,
                           AutoTokenizer,
@@ -11,9 +12,9 @@ import utils
 import warnings
 from torch.utils.tensorboard import SummaryWriter
 
-# warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")
 
-model_name = "Qwen/Qwen2-1.5B-Instruct"
+model_name = "./save_trained_model/WeiboSentiment-Qwen2-1.5B-Instruct"
 
 compute_dtype = getattr(torch, "float16")
 
@@ -39,14 +40,9 @@ tokenizer = AutoTokenizer.from_pretrained(model_name, max_seq_length=max_seq_len
 EOS_TOKEN = tokenizer.eos_token
 
 # dataset
-# filename = "data/FinancialNews/data.csv"
-# filename = "data/ChnSentiCorp/data.csv"
-filename = "data/WeiboSentiment/data.csv"
-# filename = "data/TwitterSentiment/data.csv"
-# filename = "data/SST2/data.csv"
-# filename = "data/DynamicWeibo/data.csv"
+filename = "data/DynamicWeibo/data-1.csv"
 
-processed_data = utils.process_dataset(filename, 3000, 1000, 1000)
+processed_data = utils.process_dataset(filename, 300, 100, 100)
 
 train_data = processed_data['train']
 eval_data = processed_data['eval']
@@ -76,7 +72,9 @@ def predict(test_data, model, tokenizer):
     return y_pred
 
 
-save_trained_folder = utils.get_save_trained_folder(model_name, filename)
+save_trained_folder = 'save_cycle_model/WeiboSentiment-Qwen2-1.5B-Instruct-4'
+if not os.path.exists(save_trained_folder):
+    os.makedirs(save_trained_folder, exist_ok=True)
 
 # 模型未进行微调的表现
 y_pred = predict(test_data, model, tokenizer)
@@ -96,14 +94,14 @@ peft_config = LoraConfig(
 
 training_arguments = TrainingArguments(
     output_dir=save_trained_folder+"/logs",
-    num_train_epochs=5,
+    num_train_epochs=10,
     gradient_checkpointing=True,
-    per_device_train_batch_size=16,
+    per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
     gradient_accumulation_steps=2,
     optim="paged_adamw_32bit",
     save_steps=0,
-    logging_steps=25,
+    logging_steps=15,
     learning_rate=2e-4,
     weight_decay=0.001,
     fp16=True,

@@ -4,7 +4,7 @@
 
 ------
 
-此项目是论文中使用的模型微调代码，共有4个[数据集](#数据集)，3个LLM大模型，分别是[Qwen2](https://github.com/QwenLM/Qwen2?tab=readme-ov-file)、[Gemma](https://github.com/google-deepmind/gemma)、[Llama2](https://github.com/meta-llama/llama)
+此项目是论文中使用的模型微调代码，共有4个[数据集](#数据集)，3个LLM大模型，分别是[Qwen2](https://github.com/QwenLM/Qwen2?tab=readme-ov-file)、[Gemma](https://github.com/google-deepmind/gemma)、[Llama3](https://github.com/meta-llama/llama3)
 
 
 
@@ -35,8 +35,8 @@
 # gemma-1.1-2b-it 微调脚本
 python run_gemma.py
 
-# Llama-2-7b-hf 微调脚本
-python run_llama2.py
+# Llama-3-8B 微调脚本
+python run_llama.py
 
 # Qwen2-1.5B-Instruct 微调脚本
 python run_qwen.py
