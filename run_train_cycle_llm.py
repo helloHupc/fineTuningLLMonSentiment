@@ -40,46 +40,20 @@ tokenizer = AutoTokenizer.from_pretrained(model_name, max_seq_length=max_seq_len
 EOS_TOKEN = tokenizer.eos_token
 
 # dataset
-filename = "data/DynamicWeibo/data-1.csv"
+filename = "data/DynamicWeibo/data-2.csv"
 
-processed_data = utils.process_dataset(filename, 500, 100, 200)
+processed_data = utils.train_process_dataset(filename)
 
 train_data = processed_data['train']
-eval_data = processed_data['eval']
-test_data = processed_data['test']
-y_true = processed_data['y_true']
 
 print("train_data len:", len(train_data))
 print("Training data sample:", train_data[0])
-print("Eval data sample:", eval_data[0])
-print("eval_data len:", len(eval_data))
-print("test_data len:", len(test_data))
-
-def predict(test_data, model, tokenizer):
-    y_pred = []
-    for i in tqdm(range(len(test_data))):
-        prompt = test_data.iloc[i]["text"]
-        input_ids = tokenizer(prompt, return_tensors="pt").to("cuda")
-        outputs = model.generate(**input_ids, max_new_tokens=1, temperature=0.001, do_sample=True)
-        result = tokenizer.decode(outputs[0])
-        answer = result.split("=")[-1].lower()
-        if "positive" in answer:
-            y_pred.append("positive")
-        elif "negative" in answer:
-            y_pred.append("negative")
-        else:
-            y_pred.append("none")
-    return y_pred
 
 
-save_trained_folder = 'save_cycle_model/WeiboSentiment-Qwen2-1.5B-Instruct-cycle-11'
+save_trained_folder = 'save_cycle_model/WeiboSentiment-Qwen2-1.5B-Instruct-cycle-2'
 if not os.path.exists(save_trained_folder):
     os.makedirs(save_trained_folder, exist_ok=True)
 
-# 模型未进行微调的表现
-y_pred = predict(test_data, model, tokenizer)
-
-utils.evaluate(y_true, y_pred, save_trained_folder)
 
 # 微调训练器 SFTTrainer
 peft_config = LoraConfig(
@@ -110,18 +84,13 @@ training_arguments = TrainingArguments(
     max_steps=-1,
     warmup_ratio=0.03,
     group_by_length=False,
-    eval_strategy='epoch',
-    eval_steps=112,
-    eval_accumulation_steps=2,
-    lr_scheduler_type="linear",
-    report_to="tensorboard",
+    eval_strategy='no',
 )
 
 
 trainer = SFTTrainer(
     model=model,
     train_dataset=train_data,
-    eval_dataset=eval_data,
     peft_config=peft_config,
     dataset_text_field="text",
     tokenizer=tokenizer,
@@ -137,15 +106,3 @@ trainer.train()
 trainer.model.save_pretrained(save_trained_folder)
 tokenizer.save_pretrained(save_trained_folder)
 trainer.model.config.save_pretrained(save_trained_folder)
-
-y_pred = predict(test_data, model, tokenizer)
-metrics = utils.evaluate(y_true, y_pred, save_trained_folder, 'after')
-trainer.log_metrics("eval", metrics)
-trainer.save_metrics("eval", metrics)
-
-
-summary_write_log_dir = trainer.args.output_dir
-writer = SummaryWriter(log_dir=summary_write_log_dir)
-writer.add_scalar("eval/accuracy", metrics['accuracy'])
-writer.add_scalar("eval/f1", metrics['f1'])
-writer.close()

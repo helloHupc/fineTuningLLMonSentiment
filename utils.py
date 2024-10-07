@@ -133,6 +133,20 @@ def process_dataset(filename, train_size, test_size, eval_size):
         'y_true': y_true,
     }
 
+def train_process_dataset(filename):
+    df = pd.read_csv(filename, names=["label", "text"], encoding="utf-8", encoding_errors="replace")
+
+    # 不进行分割，直接返回整个数据集
+    x_train = df.sample(frac=1, random_state=10)  # 打乱数据顺序
+
+    # 应用生成提示的函数（如果有的话）
+    x_train = pd.DataFrame(x_train.apply(generate_prompt, axis=1), columns=["text"])
+
+    train_data = Dataset.from_pandas(x_train)
+
+    return {
+        'train': train_data,
+    }
 
 # 处理T5需要的数据集
 def deal_dataset(filename, train_size=0.8, eval_size=0.1, test_size=0.1):

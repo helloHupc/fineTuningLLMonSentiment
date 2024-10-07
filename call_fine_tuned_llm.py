@@ -8,7 +8,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # 定义保存模型的文件夹路径
-save_trained_folder = "./save_trained_model/WeiboSentiment-Qwen2-1.5B-Instruct"
+# save_trained_folder = "Qwen/Qwen2-1.5B-Instruct"
+# save_trained_folder = "./save_trained_model/WeiboSentiment-Qwen2-1.5B-Instruct"
+save_trained_folder = "./save_cycle_model/WeiboSentiment-Qwen2-1.5B-Instruct-cycle-2"
 
 # 加载本地微调好的模型和分词器
 model = AutoModelForCausalLM.from_pretrained(save_trained_folder)
@@ -36,7 +38,7 @@ def predict(test_data, model, tokenizer):
 
 
 # 示例句子
-sentence = "如果是在国外：处罚小米恶意营销带来网络效应，罚款1000万？国内处理就随随便便找个个人顶包完事了"
+sentence = "小米SU7 Ultra，雷总这是要掀桌子了"
 
 # 将句子转化为 DataFrame
 sentence_df = pd.DataFrame({"text": [sentence]})
@@ -47,7 +49,10 @@ formatted_sentence = sentence_df.apply(utils.generate_test_prompt, axis=1)
 # 将格式化后的句子转化为 DataFrame，模拟 x_test 的格式
 formatted_sentence_df = pd.DataFrame(formatted_sentence, columns=["text"])
 
-print(formatted_sentence_df)
+# print(formatted_sentence_df)
+
+print("save_trained_folder:", save_trained_folder)
+print("sentence:", sentence)
 
 # 使用加载的模型进行预测
 predictions = predict(formatted_sentence_df, model, tokenizer)

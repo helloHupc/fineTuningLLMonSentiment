@@ -49,8 +49,8 @@ tokenizer.pad_token = tokenizer.eos_token
 
 # dataset
 # filename = "data/FinancialNews/data.csv"
-filename = "data/ChnSentiCorp/data.csv"
-# filename = "data/WeiboSentiment/data.csv"
+# filename = "data/ChnSentiCorp/data.csv"
+filename = "data/WeiboSentiment/data.csv"
 # filename = "data/TwitterSentiment/data.csv"
 
 processed_data = utils.process_dataset(filename, 3000, 1000, 1000)
